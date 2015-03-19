@@ -1,0 +1,8 @@
+*.pyc
+*.swp
+*.log
+settings.py
+dump.rdb
+nohup.out
+.idea/
+*.iml
