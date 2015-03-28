@@ -27,11 +27,12 @@ type Metric struct {
 
 type Measurement struct {
 	value     float64
-	timestamp float64
+	timestamp int64
 }
 
+type Measurements []Measurement
+
 func handleMetric(inq chan []byte, outq chan Metric, client *redis.Client, loopcount *uint64, loopstart *time.Time, wg *sync.WaitGroup) {
-	//wg.Add(1)
 	defer wg.Done()
 	pipe := client.Pipeline()
 
@@ -40,9 +41,8 @@ func handleMetric(inq chan []byte, outq chan Metric, client *redis.Client, loopc
 		message := string(item)
 		messageCleaned := strings.TrimSuffix(message, "\n")
 		splitLine := strings.Split(messageCleaned, " ")
-		//mpval, _ := msgpack.Marshal(splitLine[1] + " " + splitLine[2])
 		val, _ := strconv.ParseFloat(splitLine[1], 64)
-		ts, _ := strconv.ParseFloat(splitLine[2], 64)
+		ts, _ := strconv.ParseInt(splitLine[2], 10, 64)
 
 		mpval, _ := msgpack.Marshal(Measurement{value: val, timestamp: ts})
 		pipe.Append(splitLine[0], string(mpval))
@@ -115,7 +115,7 @@ func main() {
 
 	client := redis.NewClient(&redis.Options{Network: "unix", Addr: "/tmp/redis.sock"})
 	defer client.Close()
-	msg, _ := msgpack.Marshal(Measurement{value: 123.456, timestamp: 123456.7890})
+	msg, _ := msgpack.Marshal(Measurement{value: 123.456, timestamp: 1234567890})
 	client.Append("testmp", string(msg))
 	inq := make(chan []byte, 1000000)
 	mets := make(chan Metric, 1000000)
@@ -134,5 +134,6 @@ func main() {
 		wg.Add(1)
 		go trimMetrics(MAX_METRICS, client, TRIM_INTERVAL)
 	}
+
 	wg.Wait()
 }

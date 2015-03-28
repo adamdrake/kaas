@@ -1,4 +1,4 @@
-package main
+package test_client
 
 import (
 	"math/rand"

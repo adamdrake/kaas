@@ -5,4 +5,5 @@ settings.py
 dump.rdb
 nohup.out
 .idea/
+.bin/
 *.iml
