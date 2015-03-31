@@ -142,6 +142,7 @@ func median(a []float64) float64 {
 }
 
 // BUG(Adam Drake): Assumes unimodal but not checked, add dip test
+
 func variance(a []float64) float64 {
 	return cov(a, a)
 }
@@ -162,7 +163,7 @@ func cov(a, b []float64) float64 {
 	for i := 0; i < len(a); i++ {
 		sum += (a[i] - aMean) * (b[i] - bMean)
 	}
-	return sum / float64(len(a)-1)
+	return sum / float64(len(a))
 
 }
 
@@ -177,7 +178,7 @@ func linearRegressionLSE(ts Measurements) (float64, float64) {
 		floatTimes = append(floatTimes, float64(v))
 	}
 
-	beta := cov(floatTimes, vals) / variance(vals)
+	beta := cov(floatTimes, vals) / variance(floatTimes)
 	alpha := mean(vals) - beta*mean(floatTimes)
 	return alpha, beta
 }

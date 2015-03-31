@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"testing"
 )
 
@@ -12,17 +13,18 @@ func TestMedian(t *testing.T) {
 }
 
 func TestLinearRegressionLSE(t *testing.T) {
-	var timeseries []Measurement
+	var ts []Measurement
 	for i := 0; i < 10; i++ {
 		a := Measurement{
 			timestamp: int64(i),
 			value:     float64(i)*3.1 - 2.1,
 		}
-		timeseries = append(timeseries, a)
+		ts = append(ts, a)
 	}
-	m, c := linearRegressionLSE(timeseries)
-	if m != 3.1 || c != 2.1 {
-		t.Fatal("wrong linearregressionlse", t)
+	c, m := linearRegressionLSE(ts)
+
+	if m != 3.1 || math.Trunc(c*10)/10 != -2.1 { // truncate at first decimal place
+		t.Fatal("wrong linearregressionlse", "m", m, "c", c)
 	}
 }
 
@@ -69,6 +71,6 @@ func TestKS2Samp(t *testing.T) {
 	probe := []float64{0.4, 0.1, 1.3, 2.4, 6.5, 3.6, 5.7, 6.8, 8.9, 9, 9.1, 11.2, 1.2, 1.3, 14, 4, 5, 0.123, 9, 7, 8.1, 9.9, 2.1}
 	ksD, ksPValue := kS2Samp(reference, probe)
 	if ksD != 0.18577075098814222 || ksPValue != 0.789955481957006 {
-		t.Fatal("ewma error", t)
+		t.Fatal("ewma error\t", ksD, ksPValue, t)
 	}
 }
