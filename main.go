@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	redis "gopkg.in/redis.v2"
 	msgpack "gopkg.in/vmihailenco/msgpack.v2"
@@ -13,6 +14,33 @@ import (
 	"sync"
 	"time"
 )
+
+type graphiteEncoder struct {
+	encoder *msgpack.Encoder
+	buffer *bytes.Buffer
+}
+
+// Graphite specific encoder backed by a message pack encoder.
+// As message packe encoder has private fields, we need to wrap
+// instead of just extenting.
+func newGraphiteEncoder() *graphiteEncoder {
+	buf := &bytes.Buffer{}
+	return &graphiteEncoder{buffer: buf, encoder: msgpack.NewEncoder(buf)}
+}
+
+// Encodes the equivalent of a tuple containing two items, a int64 and a float64.
+func (e *graphiteEncoder) encodeInt64Float64Tuple(unixTimestamp int64, value float64) error {
+	if err := e.encoder.EncodeSliceLen(2); err != nil {
+		return err
+	}
+	if err := e.encoder.EncodeInt64(unixTimestamp); err != nil {
+		return err
+	}
+	if err := e.encoder.EncodeFloat64(value); err != nil {
+		return err
+	}
+	return nil
+}
 
 func check(e error) {
 	if e != nil {
@@ -37,14 +65,16 @@ func handleMetric(inq chan []byte, outq chan Metric, client *redis.Client, loopc
 	pipe := client.Pipeline()
 
 	var pipecount uint32 = 0
+	encoder := newGraphiteEncoder()
 	for item := range inq {
 		message := string(item)
 		messageCleaned := strings.TrimSuffix(message, "\n")
 		splitLine := strings.Split(messageCleaned, " ")
 		val, _ := strconv.ParseFloat(splitLine[1], 64)
 		ts, _ := strconv.ParseInt(splitLine[2], 10, 64)
-
-		mpval, _ := msgpack.Marshal(Measurement{value: val, timestamp: ts})
+		encoder.buffer.Reset()
+		check(encoder.encodeInt64Float64Tuple(ts, val))
+		mpval := encoder.buffer.Bytes()
 		pipe.Append(splitLine[0], string(mpval))
 		pipe.SAdd("metricNames", splitLine[0])
 		pipecount += 1
@@ -63,9 +93,7 @@ func handleMetric(inq chan []byte, outq chan Metric, client *redis.Client, loopc
 		}
 
 		*loopcount += 1
-
 	}
-
 }
 
 func startListening(inq chan []byte, outq chan Metric) {
