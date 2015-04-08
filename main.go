@@ -17,7 +17,7 @@ import (
 
 type graphiteEncoder struct {
 	encoder *msgpack.Encoder
-	buffer *bytes.Buffer
+	buffer  *bytes.Buffer
 }
 
 // Graphite specific encoder backed by a message pack encoder.
@@ -143,8 +143,7 @@ func main() {
 
 	client := redis.NewClient(&redis.Options{Network: "unix", Addr: "/tmp/redis.sock"})
 	defer client.Close()
-	msg, _ := msgpack.Marshal(Measurement{value: 123.456, timestamp: 1234567890})
-	client.Append("testmp", string(msg))
+
 	inq := make(chan []byte, 1000000)
 	mets := make(chan Metric, 1000000)
 	go startListening(inq, mets)
