@@ -37,6 +37,11 @@ func unDef(f float64) bool {
 	return false
 }
 
+func round(f float64, places int) float64 {
+	shift := math.Pow(10, float64(places))
+	return math.Floor(f*shift+0.5) / shift
+}
+
 // KS performs a Kolmogorov-Smirnov test for the two datasets, and returns the
 // p-value for the null hypothesis that the two sets come from the same distribution.
 func ks(data1, data2 []float64) float64 {
@@ -163,7 +168,7 @@ func cov(a, b []float64) float64 {
 	for i := 0; i < len(a); i++ {
 		sum += (a[i] - aMean) * (b[i] - bMean)
 	}
-	return sum / float64(len(a))
+	return sum / float64(len(a)-1)
 
 }
 
@@ -402,11 +407,10 @@ func firstHourAverage(timeseries Measurements, fullDuration int64) bool {
 // deviation of the average. This does not exponentially weight the MA and so
 // is better for detecting anomalies with respect to the entire series.
 // BUG(Adam Drake): Assumes unimodal but not checked.  Add dip test.
-func simpleStddevFromMovingAverage(timeseries Measurements) bool {
-	series := timeseries.values()
-	mean := mean(series)
-	stdDev := std(series)
-	t := tailAvg(series)
+func simpleStddevFromMovingAverage(ts []float64) bool {
+	mean := mean(ts)
+	stdDev := std(ts)
+	t := tailAvg(ts)
 	return math.Abs(t-mean) > 3*stdDev
 }
 
@@ -415,34 +419,33 @@ func simpleStddevFromMovingAverage(timeseries Measurements) bool {
 // three datapoint minus the moving average is greater than one standard
 // deviation of the moving average. This is better for finding anomalies with
 // respect to the short term trends.
-func stddevFromMovingAverage(timeseries Measurements) bool {
-	series := timeseries.values()
-	expAverage := ewma(series, 50)
-	stdDev := ewmStd(series, 50)
-	return math.Abs(series[len(series)-1]-expAverage[len(expAverage)-1]) > (3 * stdDev[len(stdDev)-1])
+func stddevFromMovingAverage(ts []float64) bool {
+	expAverage := ewma(ts, 50)
+	stdDev := ewmStd(ts, 50)
+	return math.Abs(ts[len(ts)-1]-expAverage[len(expAverage)-1]) > (3 * stdDev[len(stdDev)-1])
 }
 
 // MeanSubtractionCumulation function
 // A timeseries is anomalous if the value of the next datapoint in the
 // series is farther than a standard deviation out in cumulative terms
-// after subtracting the mean from each data point.
-func meanSubtractionCumulation(timeseries Measurements) bool {
-	series := timeseries.values()
-	mean := mean(series[:len(series)-1])
-	for i, val := range series {
-		series[i] = val - mean
+// / after subtracting the mean from each data point.
+//BUG(Adam Drake): Handle case where len(ts) == 0
+func meanSubtractionCumulation(ts []float64) bool {
+	mean := mean(ts[:len(ts)-1])
+	for i, val := range ts {
+		ts[i] = val - mean
 	}
-	stdDev := std(series[:len(series)-1])
-	return math.Abs(series[len(series)-1]) > 3*stdDev
+	stdDev := std(ts[:len(ts)-1])
+	return math.Abs(ts[len(ts)-1]) > 3*stdDev
 }
 
 // LeastSquares function
 // A timeseries is anomalous if the average of the last three datapoints
 // on a projected least squares model is greater than three sigma.
-func leastSquares(timeseries Measurements) bool {
-	m, c := linearRegressionLSE(timeseries)
+func leastSquares(ts Measurements) bool {
+	m, c := linearRegressionLSE(ts)
 	var errs []float64
-	for _, val := range timeseries {
+	for _, val := range ts {
 		projected := m*float64(val.timestamp) + c
 		errs = append(errs, val.value-projected)
 	}
