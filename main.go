@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"errors"
+	"io"
 )
 
 type graphiteEncoder struct {
@@ -22,7 +24,7 @@ type graphiteEncoder struct {
 
 // Graphite specific encoder backed by a message pack encoder.
 // As message packe encoder has private fields, we need to wrap
-// instead of just extenting.
+// instead of just extending.
 func newGraphiteEncoder() *graphiteEncoder {
 	buf := &bytes.Buffer{}
 	return &graphiteEncoder{buffer: buf, encoder: msgpack.NewEncoder(buf)}
@@ -41,6 +43,33 @@ func (e *graphiteEncoder) encodeInt64Float64Tuple(unixTimestamp int64, value flo
 	}
 	return nil
 }
+
+type graphiteDecoder msgpack.Decoder
+
+func newGraphiteDecoder(r io.Reader) *graphiteDecoder {
+	return (*graphiteDecoder)(msgpack.NewDecoder(r))
+}
+
+func (d *graphiteDecoder) decodeInt64Float64Tuple() (int64, float64, error){
+	md := (*msgpack.Decoder)(d)
+	s, err := md.DecodeSliceLen()
+	if err != nil {
+		return 0, 0, err;
+	}
+	if s != 2 {
+		return 0, 0, errors.New("not a list of size 2")
+	}
+	i, err := md.DecodeInt64()
+	if err != nil {
+		return 0,0, err
+	}
+	f, err := md.DecodeFloat64()
+	if err != nil {
+		return 0, 0, err
+	}
+	return i, f, nil
+}
+
 
 func check(e error) {
 	if e != nil {
@@ -108,23 +137,37 @@ func startListening(inq chan []byte, outq chan Metric) {
 	}
 }
 
-func trimMetrics(maxlen int, client *redis.Client, interval int) {
+func metricTrimmerLoop(maxlen int, client *redis.Client, interval int) {
 	for {
 		metricNames, err := client.SMembers("metricNames").Result()
 		check(err)
 		for _, name := range metricNames {
-			var vals []Measurement
 			rawvals, err := client.Get(name).Result()
 			check(err)
-			err = msgpack.Unmarshal([]byte(rawvals), &vals)
+			trimmed, err := trimMetrics(maxlen, strings.NewReader(rawvals))
 			check(err)
-			outvals, _ := msgpack.Marshal(vals[0:maxlen])
-			client.Set(name, string(outvals))
+			client.Set(name, string(trimmed))
 		}
 		time.Sleep(time.Second * time.Duration(interval))
 	}
-
 }
+
+func trimMetrics(maxlen int, r io.Reader) ([]byte, error){
+	var err error
+	var i int = 0
+	d := newGraphiteDecoder(r)
+	e := newGraphiteEncoder()
+	for err != io.EOF && i < maxlen {
+		iVal, fVal, err := d.decodeInt64Float64Tuple()
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		err = e.encodeInt64Float64Tuple(iVal, fVal)
+		i++
+	}
+	return e.buffer.Bytes(), nil
+}
+
 
 func main() {
 	startTime := time.Now()
@@ -141,7 +184,8 @@ func main() {
 	logger := log.New(logFile, "", log.LstdFlags)
 	logger.Println("starting execution at", startTime)
 
-	client := redis.NewClient(&redis.Options{Network: "unix", Addr: "/tmp/redis.sock"})
+	//client := redis.NewClient(&redis.Options{Network: "unix", Addr: "/tmp/redis.sock"})
+	client := redis.NewClient(&redis.Options{Network: "tcp", Addr: "localhost:6379"})
 	defer client.Close()
 
 	inq := make(chan []byte, 1000000)
@@ -159,7 +203,7 @@ func main() {
 
 	for i := 0; i < WORKER_COUNT; i++ {
 		wg.Add(1)
-		go trimMetrics(MAX_METRICS, client, TRIM_INTERVAL)
+		go metricTrimmerLoop(MAX_METRICS, client, TRIM_INTERVAL)
 	}
 
 	wg.Wait()
