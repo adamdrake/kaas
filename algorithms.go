@@ -227,11 +227,11 @@ func histogram(series []float64, bins int) ([]int, []float64) {
 	for i := 0; i < bl-1; i++ {
 		for _, val := range series {
 			if val >= binEdges[i] && val < binEdges[i+1] {
-				hist[i] += 1
+				hist[i]++
 				continue
 			}
 			if i == (bl-2) && val >= binEdges[i] && val <= binEdges[i+1] {
-				hist[i] += 1
+				hist[i]++
 			}
 		}
 	}
@@ -519,23 +519,23 @@ func ksTest(timeseries Measurements) bool {
 // IsAnomalouslyAnomalous function
 // This method runs a meta-analysis on the metric to determine whether the
 // metric has a past history of triggering. TODO: weight intervals based on datapoint
-func isAnomalouslyAnomalous(trigger_history Measurements, new_trigger Measurement) (bool, Measurements) {
-	if len(trigger_history) == 0 {
-		trigger_history = append(trigger_history, new_trigger)
-		return true, trigger_history
+func isAnomalouslyAnomalous(triggerHistory Measurements, newTrigger Measurement) (bool, Measurements) {
+	if len(triggerHistory) == 0 {
+		triggerHistory = append(triggerHistory, newTrigger)
+		return true, triggerHistory
 	}
-	if (new_trigger.value == trigger_history[len(trigger_history)-1].value) && (new_trigger.timestamp-trigger_history[len(trigger_history)-1].timestamp <= 300) {
-		return false, trigger_history
+	if (newTrigger.value == triggerHistory[len(triggerHistory)-1].value) && (newTrigger.timestamp-triggerHistory[len(triggerHistory)-1].timestamp <= 300) {
+		return false, triggerHistory
 	}
-	trigger_history = append(trigger_history, new_trigger)
-	trigger_times := trigger_history.timestamps()
+	triggerHistory = append(triggerHistory, newTrigger)
+	triggerTimes := triggerHistory.timestamps()
 	var intervals []float64
-	for i := range trigger_times {
-		if (i + 1) < len(trigger_times) {
-			intervals = append(intervals, float64(trigger_times[i+1]-trigger_times[i]))
+	for i := range triggerTimes {
+		if (i + 1) < len(triggerTimes) {
+			intervals = append(intervals, float64(triggerTimes[i+1]-triggerTimes[i]))
 		}
 	}
 	mean := mean(intervals)
 	stdDev := std(intervals)
-	return math.Abs(intervals[len(intervals)-1]-mean) > 3*stdDev, trigger_history
+	return math.Abs(intervals[len(intervals)-1]-mean) > 3*stdDev, triggerHistory
 }
