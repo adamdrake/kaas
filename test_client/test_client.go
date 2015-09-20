@@ -1,4 +1,4 @@
-package test_client
+package main
 
 import (
 	"math/rand"
@@ -51,7 +51,7 @@ func randMetricName(n int) string {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	THOUSAND_METS_PER_SEC := 80
+	THOUSAND_METS_PER_SEC := 30
 	METRIC_NAME_LENGTH := 32
 	NUM_METRICS := 500000
 	PORT := "2001"
@@ -62,6 +62,7 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	// spawnClient(metricsList, PORT, &wg)
 
 	for i := 0; i < THOUSAND_METS_PER_SEC; i++ {
 		go spawnClient(metricsList, PORT, &wg)
